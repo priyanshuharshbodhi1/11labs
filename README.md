@@ -1,14 +1,14 @@
-# Hugo - AI Tour Guide 🗺️🤖
+# Sherpa - AI Tour Guide 🗺️🤖
 
 An intelligent voice-activated tour guide powered by AI that helps you discover tourist attractions with personalized recommendations.
 
 ## 🎯 Features
 
-- 🎤 **Voice Interaction** - Speak naturally to Hugo
+- 🎤 **Voice Interaction** - Speak naturally to Sherpa
 - 🤖 **AI-Powered Recommendations** - Intelligent suggestions using Google Gemini
 - 📍 **Interactive Maps** - Visual route planning
 - 🖼️ **Landmark Images** - Auto-fetched photos
-- 🔊 **Natural Speech** - Hugo speaks back to you
+- 🔊 **Natural Speech** - Sherpa speaks back to you
 - 🌍 **Multilingual** - Supports multiple languages
 
 ## 🚀 Quick Start
@@ -24,7 +24,7 @@ An intelligent voice-activated tour guide powered by AI that helps you discover 
 #### 1. Backend (Terminal 1)
 
 ```bash
-cd hugo_backend
+cd sherpa_backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -36,7 +36,7 @@ Backend runs on: `http://localhost:8000`
 #### 2. Frontend (Terminal 2)
 
 ```bash
-cd hugo
+cd sherpa_frontend
 npm install
 npm start
 ```
@@ -45,13 +45,13 @@ Frontend opens at: `http://localhost:3000`
 
 ## 🔑 Environment Setup
 
-### Backend `.env` (hugo_backend/.env)
+### Backend `.env` (sherpa_backend/.env)
 ```env
 GOOGLE_API_KEY=your_google_api_key
 GEMINI_API_KEY=your_gemini_api_key
 ```
 
-### Frontend `.env` (hugo/.env)
+### Frontend `.env` (sherpa_frontend/.env)
 ```env
 REACT_APP_GOOGLE_API_KEY=your_google_api_key
 REACT_APP_GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
@@ -67,7 +67,7 @@ REACT_APP_ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 3. Click and **hold** the microphone button
 4. Speak: "Show me tourist attractions in [city name]"
 5. Release the button
-6. Watch Hugo plan your tour!
+6. Watch Sherpa plan your tour!
 
 ## 🛠️ Technology Stack
 
@@ -95,7 +95,7 @@ REACT_APP_ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 
 Test all APIs are working:
 ```bash
-cd hugo_backend
+cd sherpa_backend
 source venv/bin/activate
 python test_all_apis.py
 ```
@@ -140,7 +140,7 @@ If ElevenLabs API works but you hear no sound:
 
 ### Map Not Loading
 
-1. Check `REACT_APP_GOOGLE_API_KEY` in `hugo/.env`
+1. Check `REACT_APP_GOOGLE_API_KEY` in `sherpa_frontend/.env`
 2. Verify Maps JavaScript API is enabled in Google Cloud Console
 3. Allow location permission when browser prompts
 

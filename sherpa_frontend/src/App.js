@@ -1,11 +1,11 @@
 import React from 'react';
-import Map from './components/Map';
+import CityMap from './components/CityMap';
 import './App.css';
 
 function App() {
   return (
     <div className="App">
-      <Map />
+      <CityMap />
     </div>
   );
 }

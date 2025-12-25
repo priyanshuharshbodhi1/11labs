@@ -130,7 +130,7 @@ pkill -f "react-scripts"
 lsof -ti:3000,8000 | xargs kill -9
 ```
 
-### No Audio from Hugo
+### No Audio from Sherpa
 
 If ElevenLabs API works but you hear no sound:
 1. Check browser console for errors
@@ -143,6 +143,21 @@ If ElevenLabs API works but you hear no sound:
 1. Check `REACT_APP_GOOGLE_API_KEY` in `sherpa_frontend/.env`
 2. Verify Maps JavaScript API is enabled in Google Cloud Console
 3. Allow location permission when browser prompts
+
+## 🚀 Deployment
+
+To deploy both backend and frontend automatically (reflecting all local changes):
+```bash
+./deploy.sh
+```
+This script will:
+1. Deploy the backend to Cloud Run (including your local `.env` variables).
+2. Capture the new Backend URL.
+3. Update the frontend configuration.
+4. Deploy the frontend to Cloud Run.
+
+### Manual Deployment
+If you prefer manual control:
 
 ## 🎓 Hackathon Submission
 

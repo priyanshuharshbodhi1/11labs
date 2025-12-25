@@ -1,15 +1,15 @@
 import { GoogleMap, LoadScript, DirectionsRenderer, Marker } from '@react-google-maps/api';
 import React, { useState, useCallback, useEffect } from 'react';
-import RecordButton from './RecordButton';
+import AudioRecorder from './AudioRecorder';
 import ChatHistory from './ChatHistory';
 import useLocation from '../hooks/useLocation';
 import { mapOptions, mapContainerStyle } from '../styles/mapStyles';
 import { API_KEYS } from '../config/api-keys';
 import { textToSpeech } from '../utils/elevenlabs';
-import { fetchGuideResponse } from '../utils/api';
+import { fetchGuideResponse } from '../utils/sherpaClient';
 import avatarImage from '../narrator_avatar.png';
 
-function Map() {
+function CityMap() {
   const [isFirstRequest, setIsFirstRequest] = useState(true);
   const { location, handleMapLoad: handleLocationMapLoad, lat, lng } = useLocation();
   const [directions, setDirections] = useState(null);
@@ -270,7 +270,7 @@ function Map() {
         transform: 'translateX(-50%)',
         zIndex: 1000
       }}>
-        <RecordButton 
+        <AudioRecorder 
           onRequestComplete={handleRequestComplete}
           location={location}
           isFirstRequest={isFirstRequest}
@@ -284,4 +284,4 @@ function Map() {
   );
 }
 
-export default Map; 
+export default CityMap; 

@@ -2,7 +2,7 @@
 """Final comprehensive API test - checking all keys including frontend ones"""
 import os
 from dotenv import load_dotenv
-from groq import Groq
+
 import requests
 import json
 
@@ -101,41 +101,43 @@ else:
     results['google_search'] = 'MISSING'
 
 # ============================================================================
-# Test 3: Groq LLM (Backend)
+# Test 3: Gemini LLM (Backend)
 # ============================================================================
-print("\n[3/5] Testing Groq LLM API (Backend)...")
+print("\n[3/5] Testing Gemini LLM API (Backend)...")
 print("-" * 70)
 
-groq_key = os.getenv('GROQ_API_KEY') or os.getenv('REACT_APP_GROQ_API_KEY')
-if groq_key:
+gemini_key = os.getenv('GEMINI_API_KEY')
+if gemini_key:
     try:
-        client = Groq(api_key=groq_key)
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            temperature=0.3,
-            max_tokens=20,
-            messages=[{"role": "user", "content": "Say 'test ok'"}]
-        )
-        print(f"✅ Groq LLM WORKING")
-        results['groq_llm'] = 'PASSED'
+        import google.generativeai as genai
+        genai.configure(api_key=gemini_key)
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        response = model.generate_content("Say 'test ok'")
+        if response.text:
+            print(f"✅ Gemini LLM WORKING")
+            results['gemini_llm'] = 'PASSED'
+        else:
+            print(f"❌ Gemini returned empty response")
+            results['gemini_llm'] = 'FAILED'
     except Exception as e:
         print(f"❌ Failed: {str(e)[:100]}")
-        results['groq_llm'] = 'FAILED'
+        results['gemini_llm'] = 'FAILED'
 else:
-    print("❌ Groq key not found")
-    results['groq_llm'] = 'MISSING'
+    print("❌ Gemini key not found")
+    results['gemini_llm'] = 'MISSING'
 
 # ============================================================================
 # Test 4: Groq Whisper (Frontend STT)
 # ============================================================================
-print("\n[4/5] Testing Groq Whisper API (Frontend)...")
+print("\n[4/5] Checking Groq Whisper Key (Frontend)...")
 print("-" * 70)
 
+groq_key = os.getenv('GROQ_API_KEY') or os.getenv('REACT_APP_GROQ_API_KEY')
 if groq_key:
-    print(f"✅ Groq Whisper WORKING (uses same key as LLM)")
+    print(f"✅ Groq Key for Whisper Present")
     results['groq_whisper'] = 'PASSED'
 else:
-    print("❌ Groq key not found")
+    print("❌ Groq key not found (Required for Frontend Whisper STT)")
     results['groq_whisper'] = 'MISSING'
 
 # ============================================================================

@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 import { API_KEYS } from '../config/api-keys';
 import guideAvatar from '../guide_avatar.png';
 import { textToSpeech } from '../utils/elevenlabs';
-import { fetchGuideResponse } from '../utils/api';
+import { fetchGuideResponse } from '../utils/sherpaClient';
 
 const openai = new OpenAI({
   apiKey: process.env.REACT_APP_GROQ_API_KEY,
@@ -12,7 +12,7 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true
 });
 
-function RecordButton({ onRequestComplete, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode }) {
+function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
@@ -231,4 +231,4 @@ function RecordButton({ onRequestComplete, location, lat, lng, selectedLandmarks
   );
 }
 
-export default RecordButton; 
+export default AudioRecorder; 

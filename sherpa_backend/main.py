@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from agent import CityWalkAgent, CityWalkResponse
+from city_walk_agent import CityWalkAgent, CityWalkResponse
 
 # 加载环境变量
 load_dotenv()
@@ -35,6 +35,10 @@ class MetaData(BaseModel):
     city: City
     is_first_request: bool
 
+@app.get("/")
+def read_root():
+    return {"status": "Sherpa Backend Running With no errors"}
+
 @app.post("/answer", response_model=CityWalkResponse)
 async def answer(query: str, metadata: MetaData = None) -> CityWalkResponse:
     """
@@ -66,4 +70,6 @@ async def answer(query: str, metadata: MetaData = None) -> CityWalkResponse:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

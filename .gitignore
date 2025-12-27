@@ -1,0 +1,4 @@
+sherpa_backend/venv/
+sherpa_frontend/venv/
+sherpa_backend/__pycache__/
+sherpa_backend/audio_cache/

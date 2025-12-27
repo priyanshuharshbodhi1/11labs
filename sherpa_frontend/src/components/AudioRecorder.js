@@ -12,7 +12,8 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true
 });
 
-function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode }) {
+// Update props to accept isSpeaking
+function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode, isHistoryOpen, onToggleHistory, hasReceivedResponse, isSpeaking }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
@@ -61,7 +62,7 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
 
   const planTourWithGuide = async (transcribedText) => {
     setIsSending(true);
-    setStatus('Consulting Vagabond...');
+    setStatus('Consulting Sherpa...');
     
     try {
       const apiResponse = await fetchGuideResponse(transcribedText, location, lat, lng, isFirstRequest);
@@ -84,10 +85,11 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
           landmarks: apiResponse.locations
         }),
         parsedLandmarks: landmarksWithImages,
-        userQuery: transcribedText
+        userQuery: transcribedText,
+        speech: apiResponse.speech,
+        audio_url: apiResponse.audio_url
       };
 
-      textToSpeech(apiResponse.speech);
       onRequestComplete(data);
       return data;
     } catch (error) {
@@ -128,6 +130,8 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
     }
   }, [recorderMediaBlobUrl]);
 
+  const isThinking = isTranscribing || isSending;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
       
@@ -139,96 +143,224 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
           maxWidth: '80vw',
           textAlign: 'center',
           animation: 'fadeIn 0.3s ease-in',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+          background: 'rgba(15, 23, 42, 0.6)', // Darker, semi-transparent background
+          backdropFilter: 'blur(12px)',        // stronger blur
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)', // subtle border
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)', // deeper shadow
+          color: '#fff' // White text for contrast
         }}>
-           <div style={{ color: 'var(--primary-accent)', fontWeight: '600', marginBottom: '4px' }}>
-             {status || 'Processing...'}
+           <div style={{ 
+             color: '#38bdf8', // Light blue accent for status text
+             fontWeight: '600', 
+             marginBottom: '4px',
+             textTransform: 'uppercase',
+             fontSize: '0.65rem', // Smaller status text
+             letterSpacing: '0.5px'
+           }}>
+             {status || 'PROCESSING...'}
            </div>
            {transcribedText && (
-             <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>"{transcribedText}"</div>
+             <div style={{ 
+               fontSize: '0.95rem', // Smaller transcript text
+               color: '#fff', 
+               fontWeight: '500',
+               lineHeight: '1.4'
+             }}>
+               "{transcribedText}"
+             </div>
            )}
         </div>
       )}
 
-      <div style={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        {/* Cool Pulse Effect Background */}
-        <div style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          borderRadius: '50%',
-          background: isRecording ? 'rgba(239, 68, 68, 0.3)' : 'transparent',
-          transform: 'scale(1.4)',
-          filter: 'blur(10px)',
-          transition: 'all 0.3s ease',
-          zIndex: -1
-        }} />
 
-        <button
-          onMouseDown={handleRecordStart}
-          onMouseUp={handleRecordStop}
-          onTouchStart={(e) => { e.preventDefault(); handleRecordStart(); }}
-          onTouchEnd={handleRecordStop}
-          disabled={isTranscribing || isSending}
-          style={{
-            width: '72px',
-            height: '72px',
-            borderRadius: '24px', // Squircle
-            border: 'none',
-            // Cool Gradient
-            background: isRecording 
-              ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' 
-              : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-            boxShadow: isRecording 
-              ? '0 12px 24px -8px rgba(239, 68, 68, 0.5), 0 4px 6px -4px rgba(239, 68, 68, 0.3)' 
-              : '0 12px 24px -8px rgba(37, 99, 235, 0.5), 0 4px 6px -4px rgba(37, 99, 235, 0.3)',
-            color: '#fff',
-            fontSize: '28px',
-            cursor: isTranscribing || isSending ? 'wait' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)', // Bouncy transition
-            transform: isRecording ? 'scale(0.95) rotate(5deg)' : 'scale(1) rotate(0deg)',
-          }}
-        >
-          {isTranscribing || isSending ? (
-             <div className="spinner" />
-          ) : (
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
-              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-            </svg>
-          )}
-        </button>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        {/* Microphone Button with Recording Animation */}
+        <div style={{
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <button
+            onMouseDown={handleRecordStart}
+            onMouseUp={handleRecordStop}
+            onTouchStart={(e) => { e.preventDefault(); handleRecordStart(); }}
+            onTouchEnd={handleRecordStop}
+            disabled={isThinking}
+            className="orb-button" // Use class for complex animations
+            style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              border: 'none',
+              cursor: isThinking ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              zIndex: 10,
+              overflow: 'hidden',
+              boxShadow: isRecording
+                ? '0 0 40px rgba(99, 102, 241, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.5)'
+                : isThinking
+                  ? '0 0 50px rgba(192, 132, 252, 0.6), inset 0 0 30px rgba(255, 255, 255, 0.6)'
+                  : isSpeaking
+                    ? '0 0 60px rgba(56, 189, 248, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.4)'
+                    : '0 10px 30px rgba(0, 0, 0, 0.2), inset 0 0 10px rgba(255, 255, 255, 0.2)',
+              transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease',
+              transform: isRecording ? 'scale(1.1)' : isThinking ? 'scale(1.05)' : 'scale(1)',
+              animation: isRecording 
+                ? 'pulse-orb 2s infinite' 
+                : isThinking
+                  ? 'pulse-orb 1.5s infinite reverse' 
+                  : isSpeaking
+                    ? 'none' // Stable when speaking (no float)
+                    : 'float 6s ease-in-out infinite'
+            }}
+          >
+            {/* Orb Gradients */}
+            <div className={`orb-gradient ${isRecording ? 'fast-spin' : isThinking ? 'hyper-spin' : 'slow-spin'}`} />
+            
+            {/* Secondary Intertwining Gradient - Visible when Speaking */}
+            <div 
+                className={`orb-gradient-2 ${isSpeaking ? 'reverse-spin' : ''}`}
+                style={{ opacity: isSpeaking ? 0.8 : 0 }} 
+            />
+            
+            {/* Icons / Status Indicators */}
+            <div style={{ zIndex: 20, position: 'relative', color: '#fff' }}>
+              {isThinking ? (
+                 <div style={{ opacity: 0 }} /> 
+              ) : isRecording ? (
+                <div className="recording-bars">
+                  <span /><span /><span /><span />
+                </div>
+              ) : isSpeaking ? (
+                 // Clean look for speaking - just the orb spinning
+                 <div style={{ opacity: 0 }} />
+              ) : (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))', transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+              )}
+            </div>
+          </button>
+        </div>
       </div>
 
-      {/* Spinner Animation */}
+      {/* Animations */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .spinner {
-          width: 24px;
-          height: 24px;
-          border: 3px solid rgba(255, 255, 255, 0.3);
-          border-radius: 50%;
-          border-top-color: #fff;
-          animation: spin 1s ease-in-out infinite;
+        
+        .orb-button {
+          background: #000;
         }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+
+        /* Scale Mic on Hover */
+        .orb-button:hover svg {
+          transform: scale(1.2);
+          filter: drop-shadow(0 0 8px rgba(255,255,255,0.6));
+        }
+        
+        .orb-gradient {
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: conic-gradient(
+            from 0deg,
+            #1e3a8a 0%,    /* Deep Blue */
+            #2563eb 15%,   /* Lighter Blue */
+            #f9a8d4 30%,   /* Soft Pink */
+            #f472b6 45%,   /* Darker Pink */
+            #1e3a8a 60%,   /* Deep Blue */
+            #93c5fd 75%,   /* Light Blue */
+            #f9a8d4 90%,   /* Soft Pink */
+            #1e3a8a 100%   /* Deep Blue */
+          );
+          filter: blur(12px); /* Reduced blur for more distinct "strands" */
+          opacity: 0.95;
+        }
+
+        /* Secondary Gradient for Intertwining Effect */
+        .orb-gradient-2 {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(
+                from 180deg,
+                #fdba74 0%,    /* Orange/Peach */
+                #fbbf24 20%,   /* Amber */
+                #1e3a8a 40%,   /* Deep Blue overlay */
+                #fdba74 60%,   /* Peach */
+                #ffffff 80%,   /* White highlight */
+                #fdba74 100%   /* Orange/Peach */
+            );
+            filter: blur(15px);
+            mix-blend-mode: overlay;
+            transition: opacity 0.5s ease;
+        }
+
+        .slow-spin { animation: spin-gradient 30s linear infinite; }
+        .fast-spin { animation: spin-gradient 2s linear infinite; }
+        .hyper-spin { animation: spin-gradient 0.8s linear infinite; }
+        .reverse-spin { animation: spin-gradient 3s linear infinite reverse; } /* Counter-rotation */
+
+        @keyframes spin-gradient {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-orb {
+          0% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), inset 0 0 20px rgba(255, 255, 255, 0.5); transform: scale(1.1); }
+          50% { box-shadow: 0 0 50px rgba(99, 102, 241, 0.8), inset 0 0 30px rgba(255, 255, 255, 0.8); transform: scale(1.15); }
+          100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), inset 0 0 20px rgba(255, 255, 255, 0.5); transform: scale(1.1); }
+        }
+
+        @keyframes float {
+          0% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+          100% { transform: translateY(0); }
+        }
+
+        .recording-bars {
+          display: flex;
+          gap: 4px;
+          align-items: center;
+          height: 24px;
+        }
+        .recording-bars span {
+          width: 4px;
+          background: #fff;
+          border-radius: 2px;
+          box-shadow: 0 0 4px rgba(255,255,255,0.8);
+          animation: bars 0.8s ease-in-out infinite;
+        }
+        .recording-bars span:nth-child(1) { height: 8px; animation-delay: 0s; }
+        .recording-bars span:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+        .recording-bars span:nth-child(3) { height: 12px; animation-delay: 0.2s; }
+        .recording-bars span:nth-child(4) { height: 20px; animation-delay: 0.3s; }
+        @keyframes bars {
+          0%, 100% { transform: scaleY(1); }
+          50% { transform: scaleY(1.5); }
         }
       `}</style>
     </div>
   );
 }
 
-export default AudioRecorder; 
+export default AudioRecorder;

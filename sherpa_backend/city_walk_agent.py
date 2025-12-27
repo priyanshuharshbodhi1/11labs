@@ -5,6 +5,7 @@ import time
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+from tts import TTSManager
 
 load_dotenv()
 
@@ -79,6 +80,7 @@ class DisplayNames(pydantic.BaseModel):
 class CityWalkResponse(pydantic.BaseModel):
     locations: list[Location]
     speech: str
+    audio_url: str | None = None
 
 class InformationSeeking(pydantic.BaseModel):
     prediction: bool
@@ -160,6 +162,7 @@ class CityWalkAgent:
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
         # Using gemini-2.0-flash-exp as confirmed working by tests
         self.client = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.tts = TTSManager()
         
         self.system_prompt =  {
             "role": "system",
@@ -627,6 +630,15 @@ class CityWalkAgent:
             print(f"Failed to infer preferences: {e}")
             pass
         
+        # Generate Audio with language-specific voice
+        try:
+            audio_path = self.tts.generate_audio(response['speech'], language=self.language)
+            if audio_path:
+                response['audio_url'] = f"/audio/{os.path.basename(audio_path)}"
+        except Exception as e:
+            print(f"Failed to generate audio: {e}")
+            response['audio_url'] = None
+
         return response
     
 

@@ -11,6 +11,9 @@ load_dotenv()
 
 app = FastAPI()
 
+from fastapi.staticfiles import StaticFiles
+import os
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,6 +21,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+os.makedirs("audio_cache", exist_ok=True)
+app.mount("/audio", StaticFiles(directory="audio_cache"), name="audio")
 
 agent = CityWalkAgent()
 

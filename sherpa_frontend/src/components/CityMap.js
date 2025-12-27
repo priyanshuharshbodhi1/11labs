@@ -1,4 +1,4 @@
-import { GoogleMap, LoadScript, DirectionsRenderer, Marker } from '@react-google-maps/api';
+import { GoogleMap, LoadScript, DirectionsRenderer, Marker, OverlayView } from '@react-google-maps/api';
 import React, { useState, useCallback, useEffect } from 'react';
 import AudioRecorder from './AudioRecorder';
 import ChatHistory from './ChatHistory';
@@ -8,6 +8,7 @@ import { API_KEYS } from '../config/api-keys';
 import { textToSpeech } from '../utils/elevenlabs';
 import { fetchGuideResponse } from '../utils/sherpaClient';
 import avatarImage from '../narrator_avatar.png';
+import './CityMap.css';
 
 function CityMap() {
   const [isFirstRequest, setIsFirstRequest] = useState(true);
@@ -16,10 +17,16 @@ function CityMap() {
   
   // Chat History State
   const [history, setHistory] = useState([]);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(true);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [hasReceivedResponse, setHasReceivedResponse] = useState(false);
 
   // Persistence removed as per user request
 
+  // State for synchronized speech captions
+  const [currentSpeech, setCurrentSpeech] = useState('');
+  const [displayedWordCount, setDisplayedWordCount] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [lastResponse, setLastResponse] = useState(''); // Persist last response
 
   // State for map center
   const [mapCenter, setMapCenter] = useState({
@@ -47,6 +54,53 @@ function CityMap() {
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [tellMeAboutLandmark, setTellMeAboutLandmark] = useState(null);
 
+  // Play audio with synchronized word-by-word captions
+  const playAudioWithCaptions = useCallback((audioUrl, speechText) => {
+    const words = speechText.split(' ');
+    const audio = new Audio(audioUrl);
+    
+    // Reset caption state
+    setCurrentSpeech(speechText);
+    setDisplayedWordCount(0);
+    setIsSpeaking(true);
+    
+    let wordTimer = null;
+    
+    audio.onloadedmetadata = () => {
+      const duration = audio.duration * 1000; // Convert to ms
+      const wordInterval = duration / words.length;
+      
+      let wordIndex = 0;
+      wordTimer = setInterval(() => {
+        wordIndex++;
+        setDisplayedWordCount(wordIndex);
+        if (wordIndex >= words.length) {
+          clearInterval(wordTimer);
+        }
+      }, wordInterval);
+    };
+    
+    audio.onended = () => {
+      if (wordTimer) clearInterval(wordTimer);
+      setDisplayedWordCount(words.length); // Show all words
+      setLastResponse(speechText); // Persist the response
+      // Keep speaking state for a moment, then stop
+      setTimeout(() => {
+        setIsSpeaking(false);
+      }, 1000);
+    };
+    
+    audio.onerror = (e) => {
+      console.error("Error playing audio:", e);
+      setIsSpeaking(false);
+    };
+    
+    audio.play().catch(e => {
+      console.error("Error playing audio:", e);
+      setIsSpeaking(false);
+    });
+  }, []);
+
   useEffect(() => {
     requestDirections(selectedLandmarks);
   }, [selectedLandmarks]);
@@ -61,8 +115,19 @@ function CityMap() {
     }
     if (response.speech) {
       newHistory.push({ role: 'assistant', text: response.speech });
-      // Open history panel when new message arrives
-      setIsHistoryOpen(true);
+      setHasReceivedResponse(true);
+      
+      // Play audio from backend with synchronized captions
+      if (response.audio_url) {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+        const fullAudioUrl = `${backendUrl}${response.audio_url}`;
+        playAudioWithCaptions(fullAudioUrl, response.speech);
+      } else {
+        // Fallback - no captions for direct TTS
+        textToSpeech(response.speech);
+      }
+      
+      // Don't auto-open history - let caption show first
     }
     setHistory(newHistory);
 
@@ -71,9 +136,6 @@ function CityMap() {
       setSelectedLandmarks(response.parsedLandmarks);
       setIsExploreMode(true);
     }
-    
-    // Add marker for the response location if strictly related? 
-    // For now we just keep the general landmarks.
   };
 
   const requestDirections = useCallback((landmarks) => {
@@ -111,7 +173,14 @@ function CityMap() {
       const apiResponse = await fetchGuideResponse(prompt, location, lat, lng, isFirstRequest);
       
       setTellMeAboutLandmark(apiResponse.speech);
-      textToSpeech(apiResponse.speech);
+      
+      if (apiResponse.audio_url) {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+        const fullAudioUrl = `${backendUrl}${apiResponse.audio_url}`;
+        playAudioWithCaptions(fullAudioUrl, apiResponse.speech);
+      } else {
+        textToSpeech(apiResponse.speech);
+      }
       
       // Add to history
       setHistory(prev => [
@@ -136,89 +205,99 @@ function CityMap() {
 
   return (
     <div style={mapContainerStyle}>
-      {/* Top Bar / Header */}
+      {/* Top Bar / Header with Caption */}
       <div style={{
         position: 'absolute',
         top: 20,
         left: 20,
         zIndex: 1000,
         display: 'flex',
-        alignItems: 'center',
-        gap: '15px'
+        flexDirection: 'column',
+        gap: '10px',
+        maxWidth: '400px'
       }}>
-         <div className="glass-panel" style={{ padding: '8px', borderRadius: '50%', backgroundColor: '#fff' }}>
-            <img src={avatarImage} alt="Vagabond" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
-         </div>
-         <h1 style={{ 
-            margin: 0, 
-            fontSize: '1.8rem', 
-            fontWeight: '800', 
-            color: 'var(--text-primary)',
-            textShadow: '0 2px 4px rgba(255,255,255,0.8)'
-         }}>VAGABOND</h1>
-         
-         <button 
-           onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-           className="glass-panel"
-           style={{
-             padding: '10px 16px',
-             cursor: 'pointer',
-             color: 'var(--primary-accent)',
-             fontWeight: '600',
-             border: '1px solid var(--glass-border)'
-           }}
-         >
-           {isHistoryOpen ? 'Hide Log' : 'Show Log'}
-         </button>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '15px'
+        }}>
+           <div style={{ borderRadius: '50%', border: '3px solid #1a365d', overflow: 'hidden' }}>
+             <img src={avatarImage} alt="Sherpa" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+           </div>
+           <h1 style={{ 
+              margin: 0, 
+              fontSize: '2rem', 
+              fontWeight: '700', 
+              fontFamily: "'Poppins', sans-serif",
+              color: '#1a365d',
+              textShadow: '0 2px 4px rgba(255,255,255,0.9)',
+              letterSpacing: '2px'
+           }}>SHERPA</h1>
+        </div>
+        
+        {/* Speech Caption Bubble - Dark theme, hidden when chat history is open */}
+        {hasReceivedResponse && !isHistoryOpen && (lastResponse || (isSpeaking && currentSpeech)) && (
+          <div>
+            <div className="custom-scroll speech-bubble-container">
+              <div style={{ 
+                color: '#94a3b8', 
+                fontSize: '0.7rem', 
+                marginBottom: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                🗣️ SHERPA SAYS
+              </div>
+              
+                <p style={{
+                  margin: 0,
+                  fontSize: '0.9rem',
+                  lineHeight: '1.5',
+                  color: '#fff',
+                  fontFamily: "'Poppins', sans-serif",
+                  textAlign: 'left'
+                }}>
+                  {isSpeaking && currentSpeech 
+                    ? currentSpeech.split(' ').slice(0, displayedWordCount).join(' ')
+                    : lastResponse
+                  }
+                  {isSpeaking && displayedWordCount < (currentSpeech?.split(' ')?.length || 0) && (
+                    <span style={{
+                      display: 'inline-block',
+                      width: '2px',
+                      height: '1em',
+                      backgroundColor: '#fff',
+                      marginLeft: '2px',
+                      animation: 'blink 0.8s infinite'
+                    }} />
+                  )}
+                </p>
+              </div>
+
+              {/* Chats Button - Below the bubble with gap */}
+              <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-start' }}>
+                <button 
+                  onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                  className="chats-button"
+                >
+                  <span>💬</span>Show Chats
+                </button>
+              </div>
+          </div>
+        )}
       </div>
 
-      <ChatHistory 
-        history={history} 
-        isOpen={isHistoryOpen} 
-        onClose={() => setIsHistoryOpen(false)}
-        onClear={() => setHistory([])}
-      />
-
-      {selectedMarker && (
-        <div className="glass-panel" style={{
-            position: 'absolute',
-            bottom: '120px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '90%',
-            maxWidth: '500px',
-            padding: '20px',
-            zIndex: 1000,
-            display: 'flex',
-            gap: '15px',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)'
-        }}>
-          <img 
-            src={selectedMarker.photoUrl} 
-            alt={selectedMarker.name}
-            style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover' }}
-          />
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <h4 style={{ margin: '0 0 5px 0', color: 'var(--text-primary)', fontSize: '1.1rem' }}>{selectedMarker.displayName || selectedMarker.name}</h4>
-              <button 
-                onClick={() => removeLandmark(selectedMarker)}
-                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-              >✕</button>
-            </div>
-            
-            <div style={{ marginBottom: '8px' }}>
-                {[...Array(5)].map((_, i) => (
-                  <span key={i} style={{ color: i < (selectedMarker.rating || 0) ? '#f59e0b' : '#cbd5e1' }}>★</span>
-                ))}
-            </div>
-            
-            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              {tellMeAboutLandmark || 'Translating location data...'}
-            </p>
-          </div>
-        </div>
+      {hasReceivedResponse && (
+        <ChatHistory 
+          history={history} 
+          isOpen={isHistoryOpen} 
+          onClose={() => setIsHistoryOpen(false)}
+          onClear={() => setHistory([])}
+        />
       )}
+
+      {/* Info Card moved to OverlayView inside GoogleMap */}
 
       <LoadScript 
         googleMapsApiKey={API_KEYS.GOOGLE}
@@ -236,9 +315,15 @@ function CityMap() {
               key={index}
               position={landmark.location}
               onClick={() => handleMarkerClick(landmark)}
+              label={{
+                text: (index + 1).toString(),
+                color: '#fff',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
               icon={{
                 path: window.google.maps.SymbolPath.CIRCLE,
-                scale: 10,
+                scale: 14, 
                 fillColor: '#00f3ff',
                 fillOpacity: 0.9,
                 strokeWeight: 2,
@@ -246,6 +331,96 @@ function CityMap() {
               }} 
             />
           ))}
+
+          {selectedMarker && (
+            <OverlayView
+              position={selectedMarker.location}
+              mapPaneName={OverlayView.OVERLAY_FLOAT_PANE}
+              getPixelPositionOffset={(width, height) => ({
+                x: -(width / 2),
+                y: -height - 20 // Shift up above the marker
+              })}
+            >
+              <div className="glass-panel" style={{
+                  width: '260px', 
+                  padding: '12px',
+                  zIndex: 900,
+                  backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                  backdropFilter: 'blur(12px)',
+                  borderRadius: '16px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  gap: '10px',
+                  color: '#fff',
+                  transform: 'translateY(-10px)', 
+                  transition: 'opacity 0.2s ease',
+                  animation: 'fadeIn 0.2s ease-out',
+                  pointerEvents: 'auto'
+              }}>
+                <img 
+                  src={selectedMarker.photoUrl} 
+                  alt={selectedMarker.name}
+                  style={{ width: '60px', height: '60px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <h4 style={{ 
+                      margin: '0 0 4px 0', 
+                      color: '#fff', 
+                      fontSize: '0.95rem',
+                      fontWeight: '600',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {selectedMarker.displayName || selectedMarker.name}
+                    </h4>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); removeLandmark(selectedMarker); }}
+                      style={{ 
+                        background: 'rgba(255,255,255,0.1)', 
+                        border: 'none', 
+                        color: '#fff', 
+                        cursor: 'pointer',
+                        width: '18px',
+                        height: '18px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        marginLeft: '5px'
+                      }}
+                    >✕</button>
+                  </div>
+                  
+                  <div style={{ marginBottom: '6px' }}>
+                      {[...Array(5)].map((_, i) => (
+                        <span key={i} style={{ fontSize: '0.8rem', color: i < (selectedMarker.rating || 0) ? '#f59e0b' : '#475569' }}>★</span>
+                      ))}
+                  </div>
+                  
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {tellMeAboutLandmark || 'Translating location data...'}
+                  </p>
+                </div>
+                
+                {/* Little triangle arrow at bottom */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: '-8px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 0,
+                  height: 0,
+                  borderLeft: '8px solid transparent',
+                  borderRight: '8px solid transparent',
+                  borderTop: '8px solid rgba(15, 23, 42, 0.9)'
+                }} />
+              </div>
+            </OverlayView>
+          )}
 
           {directions && (
             <DirectionsRenderer
@@ -268,7 +443,8 @@ function CityMap() {
         bottom: '30px',
         left: '50%',
         transform: 'translateX(-50%)',
-        zIndex: 1000
+        zIndex: 1000,
+        transition: 'left 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
       }}>
         <AudioRecorder 
           onRequestComplete={handleRequestComplete}
@@ -278,10 +454,14 @@ function CityMap() {
           lng={lng}
           selectedLandmarks={selectedLandmarks}
           isExploreMode={isExploreMode}
+          isHistoryOpen={isHistoryOpen}
+          onToggleHistory={() => setIsHistoryOpen(!isHistoryOpen)}
+          hasReceivedResponse={hasReceivedResponse}
+          isSpeaking={isSpeaking}
         />
       </div>
     </div>
   );
 }
 
-export default CityMap; 
+export default CityMap;

@@ -94,7 +94,12 @@ class TTSManager:
             audio = self.client.text_to_speech.convert(
                 text=text,
                 voice_id=voice_id,
-                model_id=model_id
+                model_id=model_id,
+                voice_settings={
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "speed": 1.30  # Increased to 1.30 for faster playback
+                }
             )
             
             # Save to cache - audio is now bytes directly

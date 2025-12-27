@@ -1,5 +1,5 @@
 import { GoogleMap, LoadScript, DirectionsRenderer, Marker, OverlayView } from '@react-google-maps/api';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import AudioRecorder from './AudioRecorder';
 import ChatHistory from './ChatHistory';
 import useLocation from '../hooks/useLocation';
@@ -26,7 +26,25 @@ function CityMap() {
   const [currentSpeech, setCurrentSpeech] = useState('');
   const [displayedWordCount, setDisplayedWordCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
   const [lastResponse, setLastResponse] = useState(''); // Persist last response
+  
+  // Refs for audio control
+  const currentAudioRef = useRef(null);
+  const wordTimerRef = useRef(null);
+
+  const stopAudio = useCallback(() => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
+    }
+    if (wordTimerRef.current) {
+      clearInterval(wordTimerRef.current);
+      wordTimerRef.current = null;
+    }
+    setIsSpeaking(false);
+  }, []);
 
   // State for map center
   const [mapCenter, setMapCenter] = useState({
@@ -55,33 +73,40 @@ function CityMap() {
   const [tellMeAboutLandmark, setTellMeAboutLandmark] = useState(null);
 
   // Play audio with synchronized word-by-word captions
+  const [isExpanded, setIsExpanded] = useState(false);  
   const playAudioWithCaptions = useCallback((audioUrl, speechText) => {
+    // Stop any currently playing audio first
+    stopAudio();
+
     const words = speechText.split(' ');
     const audio = new Audio(audioUrl);
+    currentAudioRef.current = audio; // Store ref
     
     // Reset caption state
     setCurrentSpeech(speechText);
     setDisplayedWordCount(0);
     setIsSpeaking(true);
     
-    let wordTimer = null;
-    
     audio.onloadedmetadata = () => {
       const duration = audio.duration * 1000; // Convert to ms
       const wordInterval = duration / words.length;
       
       let wordIndex = 0;
-      wordTimer = setInterval(() => {
+      const timer = setInterval(() => {
         wordIndex++;
         setDisplayedWordCount(wordIndex);
         if (wordIndex >= words.length) {
-          clearInterval(wordTimer);
+          clearInterval(timer);
         }
       }, wordInterval);
+      wordTimerRef.current = timer; // Store ref
     };
     
     audio.onended = () => {
-      if (wordTimer) clearInterval(wordTimer);
+      if (wordTimerRef.current) {
+        clearInterval(wordTimerRef.current);
+        wordTimerRef.current = null;
+      }
       setDisplayedWordCount(words.length); // Show all words
       setLastResponse(speechText); // Persist the response
       // Keep speaking state for a moment, then stop
@@ -124,7 +149,15 @@ function CityMap() {
         playAudioWithCaptions(fullAudioUrl, response.speech);
       } else {
         // Fallback - no captions for direct TTS
-        textToSpeech(response.speech);
+        stopAudio();
+        textToSpeech(response.speech).then(result => {
+          if (result && result.audio) {
+            currentAudioRef.current = result.audio;
+            result.audio.onended = () => {
+              currentAudioRef.current = null;
+            };
+          }
+        });
       }
       
       // Don't auto-open history - let caption show first
@@ -167,20 +200,16 @@ function CityMap() {
   }, []);
 
   const handleMarkerClick = async (landmark) => {
+    stopAudio(); // Stop any existing audio immediately
     setSelectedMarker(landmark);
+    setIsExpanded(false); // Reset expansion state
     try {
       const prompt = `In three sentences, tell me about ${landmark.displayName || landmark.name} by sourcing wikipedia.`;
       const apiResponse = await fetchGuideResponse(prompt, location, lat, lng, isFirstRequest);
       
       setTellMeAboutLandmark(apiResponse.speech);
       
-      if (apiResponse.audio_url) {
-        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
-        const fullAudioUrl = `${backendUrl}${apiResponse.audio_url}`;
-        playAudioWithCaptions(fullAudioUrl, apiResponse.speech);
-      } else {
-        textToSpeech(apiResponse.speech);
-      }
+      // Removed audio playback logic as per request - only show text
       
       // Add to history
       setHistory(prev => [
@@ -188,7 +217,7 @@ function CityMap() {
         { role: 'user', text: `Tell me about ${landmark.displayName || landmark.name}` },
         { role: 'assistant', text: apiResponse.speech }
       ]);
-      setIsHistoryOpen(true);
+      // setIsHistoryOpen(true); // Optional: keep history closed to focus on map popup
     } catch (error) {
       console.error('Error fetching landmark description:', error);
     }
@@ -224,15 +253,15 @@ function CityMap() {
            <div style={{ borderRadius: '50%', border: '3px solid #1a365d', overflow: 'hidden' }}>
              <img src={avatarImage} alt="Sherpa" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
            </div>
-           <h1 style={{ 
-              margin: 0, 
-              fontSize: '2rem', 
-              fontWeight: '700', 
-              fontFamily: "'Poppins', sans-serif",
-              color: '#1a365d',
-              textShadow: '0 2px 4px rgba(255,255,255,0.9)',
-              letterSpacing: '2px'
-           }}>SHERPA</h1>
+           <img 
+             src="/Sherpa_landingpage-removebg.png" 
+             alt="SHERPA" 
+             style={{ 
+               height: '110px',
+               objectFit: 'contain',
+               filter: 'drop-shadow(0 2px 4px rgba(255,255,255,0.9))'
+             }} 
+           />
         </div>
         
         {/* Speech Caption Bubble - Dark theme, hidden when chat history is open */}
@@ -309,6 +338,7 @@ function CityMap() {
           zoom={16}
           onLoad={handleGoogleMapLoad}
           options={{ ...mapOptions, gestureHandling: 'greedy' }}
+          onClick={() => setSelectedMarker(null)}
         >
           {selectedLandmarks.map((landmark, index) => (
             <Marker
@@ -335,14 +365,19 @@ function CityMap() {
           {selectedMarker && (
             <OverlayView
               position={selectedMarker.location}
-              mapPaneName={OverlayView.OVERLAY_FLOAT_PANE}
+              mapPaneName="floatPane"
               getPixelPositionOffset={(width, height) => ({
                 x: -(width / 2),
                 y: -height - 20 // Shift up above the marker
               })}
             >
-              <div className="glass-panel" style={{
-                  width: '260px', 
+              <div 
+                className="glass-panel" 
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: isExpanded ? '400px' : '260px', 
+                  maxHeight: isExpanded ? '400px' : 'auto',
+                  overflowY: isExpanded ? 'auto' : 'visible', 
                   padding: '12px',
                   zIndex: 900,
                   backgroundColor: 'rgba(15, 23, 42, 0.9)', 
@@ -401,9 +436,36 @@ function CityMap() {
                       ))}
                   </div>
                   
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#cbd5e1', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ 
+                    margin: 0, 
+                    fontSize: '0.75rem', 
+                    color: '#cbd5e1', 
+                    lineHeight: '1.3', 
+                    display: '-webkit-box', 
+                    WebkitLineClamp: isExpanded ? 'unset' : 2, 
+                    WebkitBoxOrient: 'vertical', 
+                    overflow: 'hidden' 
+                  }}>
                     {tellMeAboutLandmark || 'Translating location data...'}
                   </p>
+                  
+                  <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                     <button
+                       onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                       style={{
+                         background: 'transparent',
+                         border: '1px solid rgba(255,255,255,0.2)',
+                         borderRadius: '4px',
+                         color: '#a78bfa',
+                         fontSize: '0.7rem',
+                         padding: '2px 6px',
+                         cursor: 'pointer'
+                       }}
+                     >
+                       {isExpanded ? 'Show Less' : 'Show More'}
+                     </button>
+                  </div>
+
                 </div>
                 
                 {/* Little triangle arrow at bottom */}
@@ -448,6 +510,7 @@ function CityMap() {
       }}>
         <AudioRecorder 
           onRequestComplete={handleRequestComplete}
+          onRecordStart={stopAudio}
           location={location}
           isFirstRequest={isFirstRequest}
           lat={lat}

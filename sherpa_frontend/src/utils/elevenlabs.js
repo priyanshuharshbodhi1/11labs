@@ -66,7 +66,7 @@ export const textToSpeech = async (text) => {
       throw error;
     }
     
-    return audioUrl;
+    return { audioUrl, audio };
   } catch (error) {
     console.error('Text-to-speech error:', error);
     // [David] swallowed error, app should not crash when running out of 11labs credits

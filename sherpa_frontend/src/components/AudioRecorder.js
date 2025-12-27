@@ -13,7 +13,7 @@ const openai = new OpenAI({
 });
 
 // Update props to accept isSpeaking
-function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode, isHistoryOpen, onToggleHistory, hasReceivedResponse, isSpeaking }) {
+function AudioRecorder({ onRequestComplete, onRecordStart, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode, isHistoryOpen, onToggleHistory, hasReceivedResponse, isSpeaking }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
@@ -113,6 +113,7 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
   };
 
   const handleRecordStart = () => {
+    if (onRecordStart) onRecordStart();
     setIsRecording(true);
     setStatus('Listening...');
     startRecording();
@@ -281,14 +282,11 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
           height: 200%;
           background: conic-gradient(
             from 0deg,
-            #1e3a8a 0%,    /* Deep Blue */
-            #2563eb 15%,   /* Lighter Blue */
-            #f9a8d4 30%,   /* Soft Pink */
-            #f472b6 45%,   /* Darker Pink */
-            #1e3a8a 60%,   /* Deep Blue */
-            #93c5fd 75%,   /* Light Blue */
-            #f9a8d4 90%,   /* Soft Pink */
-            #1e3a8a 100%   /* Deep Blue */
+            ${props => props.isSpeaking ? `
+              #fcd34d 0%, #fbbf24 15%, #ffffff 30%, #f59e0b 45%, #fcd34d 60%, #fbbf24 75%, #ffffff 90%, #fcd34d 100%
+            ` : `
+              #3b82f6 0%, #60a5fa 15%, #ffffff 30%, #2563eb 45%, #3b82f6 60%, #60a5fa 75%, #ffffff 90%, #3b82f6 100%
+            `}
           );
           filter: blur(12px); /* Reduced blur for more distinct "strands" */
           opacity: 0.95;
@@ -303,12 +301,11 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
             height: 200%;
             background: conic-gradient(
                 from 180deg,
-                #fdba74 0%,    /* Orange/Peach */
-                #fbbf24 20%,   /* Amber */
-                #1e3a8a 40%,   /* Deep Blue overlay */
-                #fdba74 60%,   /* Peach */
-                #ffffff 80%,   /* White highlight */
-                #fdba74 100%   /* Orange/Peach */
+                ${props => props.isSpeaking ? `
+                  #ffffff 0%, #fef3c7 20%, #fcd34d 40%, #ffffff 60%, #fbbf24 80%, #ffffff 100%
+                ` : `
+                  #ffffff 0%, #dbeafe 20%, #60a5fa 40%, #ffffff 60%, #3b82f6 80%, #ffffff 100%
+                `}
             );
             filter: blur(15px);
             mix-blend-mode: overlay;
@@ -357,6 +354,28 @@ function AudioRecorder({ onRequestComplete, location, lat, lng, selectedLandmark
         @keyframes bars {
           0%, 100% { transform: scaleY(1); }
           50% { transform: scaleY(1.5); }
+        }
+      `}</style>
+      <style>{`
+        .orb-gradient {
+            background: conic-gradient(
+                from 0deg,
+                ${(isSpeaking || status === 'Speaking...') ? `
+                  #3b82f6 0%, #60a5fa 15%, #ffffff 30%, #2563eb 45%, #3b82f6 60%, #60a5fa 75%, #ffffff 90%, #3b82f6 100%
+                ` : `
+                   #fcd34d 0%, #fbbf24 15%, #ffffff 30%, #f59e0b 45%, #fcd34d 60%, #fbbf24 75%, #ffffff 90%, #fcd34d 100%
+                `}
+            ) !important;
+        }
+        .orb-gradient-2 {
+            background: conic-gradient(
+                from 180deg,
+                ${(isSpeaking || status === 'Speaking...') ? `
+                  #ffffff 0%, #dbeafe 20%, #60a5fa 40%, #ffffff 60%, #3b82f6 80%, #ffffff 100%
+                ` : `
+                   #ffffff 0%, #fef3c7 20%, #fcd34d 40%, #ffffff 60%, #fbbf24 80%, #ffffff 100%
+                `}
+            ) !important;
         }
       `}</style>
     </div>

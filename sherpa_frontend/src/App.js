@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import CityMap from './components/CityMap';
-import LandingPage from './components/LandingPage';
+import CityMap from './components/CityMap/CityMap';
+import LandingPage from './components/LandingPage/LandingPage';
 import './App.css';
 
 function App() {

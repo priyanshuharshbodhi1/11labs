@@ -4,7 +4,8 @@ import requests
 import time
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
+import vertexai
+from vertexai.generative_models import GenerativeModel, GenerationConfig
 from utils.tts import TTSManager
 
 load_dotenv()
@@ -32,7 +33,10 @@ def extract_json_from_response(text):
     return text.strip()
 
 def call_gemini(model, system_prompt, messages=None, temperature=0.7, max_tokens=4000):
-    """Helper function to call Gemini API with proper message formatting."""
+    """Helper function to call Vertex AI Gemini with proper message formatting."""
+    # Simple rate limiting for experimental models to avoid Quota Exceeded
+    time.sleep(5)
+
     # Build the prompt combining system and messages
     prompt_parts = []
     
@@ -51,10 +55,10 @@ def call_gemini(model, system_prompt, messages=None, temperature=0.7, max_tokens
     full_prompt = "\n\n".join(prompt_parts)
     
     # Configure generation settings
-    generation_config = {
-        'temperature': temperature,
-        'max_output_tokens': max_tokens,
-    }
+    generation_config = GenerationConfig(
+        temperature=temperature,
+        max_output_tokens=max_tokens,
+    )
     
     # Make the API call
     response = model.generate_content(
@@ -87,55 +91,7 @@ class InformationSeeking(pydantic.BaseModel):
     location: str
 
 poi = [
-# 'cultural_landmark *',
-# 'historical_place *',
-# 'monument *',
-# 'museum',
-# 'performing_arts_theater',
-# 'sculpture *',
-# 'library',
-# 'university',
-# 'adventure_sports_center *',
-# 'amphitheatre',
-# 'amusement_center',
-# 'amusement_park',
-# 'aquarium',
-# 'banquet_hall',
-# 'barbecue_area *',
-# 'botanical_garden *',
-# 'bowling_alley',
-# 'comedy_club *',
-# 'community_center',
-# 'concert_hall *',
-# 'convention_center',
-# 'cultural_center',
-# 'cycling_park *',
-# 'dance_hall *',
-# 'dog_park',
-# 'event_venue',
-# 'garden *',
-# 'hiking_area *',
-# 'historical_landmark',
-# 'karaoke',
-# 'marina',
-# 'movie_rental',
-# 'movie_theater',
-# 'national_park',
-# 'observation_deck *',
-# 'off_roading_area *',
-# 'opera_house*',
-# 'philharmonic_hall',
-# 'picnic_ground',
-# 'planetarium *',
-# 'skateboard_park',
-# 'state_park *',
 'tourist_attraction',
-# 'video_arcade *',
-# 'visitor_center',
-# 'water_park',
-# 'wedding_venue',
-# 'wildlife_park *',
-# 'zoo'
 ]
 
 class Preferences(pydantic.BaseModel):
@@ -158,10 +114,10 @@ class CityWalkAgent:
         self.language = "English"
         self.conversation = {}
         
-        # Configure Gemini API
-        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        # Using gemini-2.0-flash-exp as confirmed working by tests
-        self.client = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Configure Vertex AI
+        vertexai.init(project="beaming-talent-396906", location="us-central1")
+        # Using gemini-2.0-flash-exp
+        self.client = GenerativeModel('gemini-2.0-flash-exp')
         self.tts = TTSManager()
         
         self.system_prompt =  {
@@ -659,7 +615,7 @@ class CityWalkAgent:
         current_city_name = city.get('name', '')
         last_city_name = getattr(self, 'last_city_name', '')
         
-        # If city name changes significantly (and neither is empty), clear history
+        # If city name changes significantly (and neither is empty), clear conversation history
         if current_city_name and last_city_name and current_city_name != last_city_name:
             print(f"City changed from {last_city_name} to {current_city_name}. Clearing conversation history.")
             self.conversation = []
@@ -786,4 +742,3 @@ if __name__ == "__main__":
 
     response = agent.answer("What are some interesting places to visit in New York?", metadata=metadata)
     print(response)
-    

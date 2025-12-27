@@ -89,12 +89,19 @@ async def generate_story(request: StoryRequest):
     """
     print(f"Received story request for: {request.monument_name}")
     try:
+        if not story_agent:
+            print("Story Agent not initialized properly.")
+            raise HTTPException(status_code=503, detail="Story feature unavailable")
+            
         scenes = story_agent.generate_story(request.monument_name, request.location_context)
         return {"scenes": scenes}
     except Exception as e:
         print(f"Error generating story: {e}")
         import traceback
         traceback.print_exc()
+        # Return empty list or specific error structure instead of 500 if we want to be "independent" 
+        # but 500 is fine for an API. Independence means not crashing other endpoints. 
+        # The try-except here ensures that.
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

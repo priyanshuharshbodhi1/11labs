@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import '../App.css';
+import '../../App.css';
 
 const ChatHistory = ({ history, isOpen, onClose, onClear, isMobile }) => {
   const endRef = useRef(null);

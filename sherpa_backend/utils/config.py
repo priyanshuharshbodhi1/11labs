@@ -6,10 +6,10 @@ load_dotenv()
 
 class Config:
     # Story Mode Configuration
-    STORY_IMAGE_COUNT = 2  # Default number of images to generate
-    IMAGE_GENERATION_MODEL = "imageoptim-1/imagen-3.0-generate-001" # Or "image-3.0-generate-001" check available models
-    # Note: Vertex AI model IDs can be 'imagegeneration@006', 'imagen-3.0-generate-001', etc.
-    # We will try the standard endpoint.
+    # Story Mode Configuration
+    STORY_IMAGE_COUNT = 2  # Number of images to generate (1 per scene for the first 2 scenes, or split)
+    # Using Imagen 3 Fast (comparable to "Nano Banana" efficiency)
+    IMAGE_GENERATION_MODEL = "imagen-3.0-fast-generate-001" 
     
     # Text Generation
     TEXT_MODEL = "gemini-2.0-flash-exp"
@@ -19,4 +19,4 @@ class Config:
     STORY_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb" # George (Warm, Safe)
     
     # Mock Data Toggle
-    USE_MOCK_DATA = True
+    USE_MOCK_DATA = False

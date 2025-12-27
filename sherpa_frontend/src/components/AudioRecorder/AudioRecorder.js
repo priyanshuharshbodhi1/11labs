@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
 import { useReactMediaRecorder } from 'react-media-recorder';
 import OpenAI from 'openai';
-import { API_KEYS } from '../config/api-keys';
-import guideAvatar from '../guide_avatar.png';
-import { textToSpeech } from '../utils/elevenlabs';
-import { fetchGuideResponse } from '../utils/sherpaClient';
+import { API_KEYS } from '../../config/api-keys';
+import guideAvatar from '../../guide_avatar.png';
+import { textToSpeech } from '../../utils/elevenlabs';
+import { fetchGuideResponse } from '../../utils/sherpaClient';
 
 const openai = new OpenAI({
   apiKey: process.env.REACT_APP_GROQ_API_KEY,

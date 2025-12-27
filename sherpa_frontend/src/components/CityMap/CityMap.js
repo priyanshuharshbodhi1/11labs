@@ -1,15 +1,15 @@
 import { GoogleMap, LoadScript, DirectionsRenderer, Marker, OverlayView } from '@react-google-maps/api';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import AudioRecorder from './AudioRecorder';
-import ChatHistory from './ChatHistory';
-import useLocation from '../hooks/useLocation';
-import { mapOptions, mapContainerStyle } from '../styles/mapStyles';
-import { API_KEYS } from '../config/api-keys';
-import { textToSpeech } from '../utils/elevenlabs';
-import { fetchGuideResponse, fetchStory } from '../utils/sherpaClient';
-import StoryModal from './StoryModal';
-import { TOGGLES } from '../config/toggles';
-import avatarImage from '../narrator_avatar.png';
+import AudioRecorder from '../AudioRecorder/AudioRecorder';
+import ChatHistory from '../ChatHistory/ChatHistory';
+import useLocation from '../../hooks/useLocation';
+import { mapOptions, mapContainerStyle } from '../../styles/mapStyles';
+import { API_KEYS } from '../../config/api-keys';
+import { textToSpeech } from '../../utils/elevenlabs';
+import { fetchGuideResponse, fetchStory } from '../../utils/sherpaClient';
+import StoryModal from '../StoryModal/StoryModal';
+import { TOGGLES } from '../../config/toggles';
+import avatarImage from '../../narrator_avatar.png';
 import './CityMap.css';
 
 // Toggle for Instant Fetch (Disabled by default as per request to save API cost)

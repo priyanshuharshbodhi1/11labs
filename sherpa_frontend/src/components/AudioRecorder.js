@@ -13,7 +13,7 @@ const openai = new OpenAI({
 });
 
 // Update props to accept isSpeaking
-function AudioRecorder({ onRequestComplete, onRecordStart, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode, isHistoryOpen, onToggleHistory, hasReceivedResponse, isSpeaking }) {
+function AudioRecorder({ onRequestComplete, onRecordStart, location, lat, lng, selectedLandmarks, isFirstRequest, isExploreMode, isHistoryOpen, onToggleHistory, hasReceivedResponse, isSpeaking, isLocating, isMobile }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
@@ -131,7 +131,7 @@ function AudioRecorder({ onRequestComplete, onRecordStart, location, lat, lng, s
     }
   }, [recorderMediaBlobUrl]);
 
-  const isThinking = isTranscribing || isSending;
+  const isThinking = isTranscribing || isSending || isLocating;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
@@ -160,7 +160,7 @@ function AudioRecorder({ onRequestComplete, onRecordStart, location, lat, lng, s
              fontSize: '0.65rem', // Smaller status text
              letterSpacing: '0.5px'
            }}>
-             {status || 'PROCESSING...'}
+             {isLocating ? 'LOCATING...' : status || 'PROCESSING...'}
            </div>
            {transcribedText && (
              <div style={{ 
@@ -197,8 +197,8 @@ function AudioRecorder({ onRequestComplete, onRecordStart, location, lat, lng, s
             disabled={isThinking}
             className="orb-button" // Use class for complex animations
             style={{
-              width: '80px',
-              height: '80px',
+              width: isMobile ? '65px' : '80px',
+              height: isMobile ? '65px' : '80px',
               borderRadius: '50%',
               border: 'none',
               cursor: isThinking ? 'wait' : 'pointer',
@@ -360,21 +360,13 @@ function AudioRecorder({ onRequestComplete, onRecordStart, location, lat, lng, s
         .orb-gradient {
             background: conic-gradient(
                 from 0deg,
-                ${(isSpeaking || status === 'Speaking...') ? `
-                  #3b82f6 0%, #60a5fa 15%, #ffffff 30%, #2563eb 45%, #3b82f6 60%, #60a5fa 75%, #ffffff 90%, #3b82f6 100%
-                ` : `
-                   #fcd34d 0%, #fbbf24 15%, #ffffff 30%, #f59e0b 45%, #fcd34d 60%, #fbbf24 75%, #ffffff 90%, #fcd34d 100%
-                `}
+                #3b82f6 0%, #60a5fa 15%, #ffffff 30%, #2563eb 45%, #3b82f6 60%, #60a5fa 75%, #ffffff 90%, #3b82f6 100%
             ) !important;
         }
         .orb-gradient-2 {
             background: conic-gradient(
                 from 180deg,
-                ${(isSpeaking || status === 'Speaking...') ? `
-                  #ffffff 0%, #dbeafe 20%, #60a5fa 40%, #ffffff 60%, #3b82f6 80%, #ffffff 100%
-                ` : `
-                   #ffffff 0%, #fef3c7 20%, #fcd34d 40%, #ffffff 60%, #fbbf24 80%, #ffffff 100%
-                `}
+                #ffffff 0%, #dbeafe 20%, #60a5fa 40%, #ffffff 60%, #3b82f6 80%, #ffffff 100%
             ) !important;
         }
       `}</style>

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import '../App.css';
 
-const ChatHistory = ({ history, isOpen, onClose, onClear }) => {
+const ChatHistory = ({ history, isOpen, onClose, onClear, isMobile }) => {
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -19,21 +19,23 @@ const ChatHistory = ({ history, isOpen, onClose, onClear }) => {
     <>
       {/* Floating Chat Panel */}
       <div style={{
-        position: 'absolute',
-        top: '100px', // Moved down to avoid covering the Sherpa header
-        left: '20px',
-        width: '300px', // Reduced width
-        maxHeight: '400px', // Reduced height
+        position: isMobile ? 'fixed' : 'absolute',
+        top: isMobile ? 0 : '100px',
+        left: isMobile ? 0 : '20px',
+        right: isMobile ? 0 : 'auto',
+        bottom: isMobile ? 0 : 'auto',
+        width: isMobile ? '100%' : '300px',
+        maxHeight: isMobile ? '100vh' : '400px',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 2000,
-        animation: 'slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1)', // slide from left
-        background: 'rgba(15, 23, 42, 0.85)',
+        animation: isMobile ? 'fadeIn 0.3s ease' : 'slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        background: isMobile ? 'rgba(15, 23, 42, 0.98)' : 'rgba(15, 23, 42, 0.85)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderRadius: '20px',
-        border: '1px solid rgba(100, 150, 255, 0.15)',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset'
+        borderRadius: isMobile ? 0 : '20px',
+        border: isMobile ? 'none' : '1px solid rgba(100, 150, 255, 0.15)',
+        boxShadow: isMobile ? 'none' : '0 20px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset'
       }}>
         {/* Header */}
         <div style={{

@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from city_walk_agent import CityWalkAgent, CityWalkResponse
+from agents.city_walk_agent import CityWalkAgent, CityWalkResponse
 
 # 加载环境变量
 load_dotenv()
@@ -73,6 +73,29 @@ async def answer(query: str, metadata: MetaData = None) -> CityWalkResponse:
             'locations': [],
             'speech': "I apologize, I'm experiencing some technical issues. Could you please try asking your question again?"
         }
+
+# Story Mode Endpoint
+from agents.story_agent import StoryAgent
+story_agent = StoryAgent()
+
+class StoryRequest(BaseModel):
+    monument_name: str
+    location_context: str
+
+@app.post("/api/generate_story")
+async def generate_story(request: StoryRequest):
+    """
+    Generates a story with images and audio for a monument.
+    """
+    print(f"Received story request for: {request.monument_name}")
+    try:
+        scenes = story_agent.generate_story(request.monument_name, request.location_context)
+        return {"scenes": scenes}
+    except Exception as e:
+        print(f"Error generating story: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

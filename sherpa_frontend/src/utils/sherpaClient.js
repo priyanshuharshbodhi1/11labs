@@ -36,4 +36,35 @@ export const fetchGuideResponse = async (query, locationName, latitude, longitud
     console.error('Error fetching from backend:', error);
     throw error;
   }
-}; 
+};
+
+/**
+ * Fetches the generated story for a monument
+ * @param {string} monumentName - Name of the monument
+ * @param {string} locationContext - Context like "New Delhi, India"
+ * @returns {Promise<Object>} - Promise resolving to { scenes: [] }
+ */
+export const fetchStory = async (monumentName, locationContext) => {
+  try {
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+    const response = await fetch(`${backendUrl}/api/generate_story`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        monument_name: monumentName,
+        location_context: locationContext
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Story API failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching story:', error);
+    throw error;
+  }
+};

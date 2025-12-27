@@ -5,7 +5,7 @@ import time
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-from tts import TTSManager
+from utils.tts import TTSManager
 
 load_dotenv()
 
@@ -171,6 +171,21 @@ class CityWalkAgent:
             You are taking a visitor on a city walk.
             Your speech response should ALWAYS be in the language of {language}. 
             You will be provided with a list of information about the city and the visitor's interests.
+            
+            INPUT CONTEXT EXPLANATION:
+            You will receive inputs containing:
+            - "user_physical_location": The user's current GPS location.
+            - "tour_search_location": The location used to search for landmarks.
+            - "landmarks_for_tour_location": A list of landmarks found in the "tour_search_location".
+            
+            HANDLING LOCATION MISMATCHES:
+            If "user_physical_location" is different from "tour_search_location":
+            1. You MUST acknowledge this discrepancy in your speech.
+            2. If the user's intent is ambiguous (e.g. "I want to tour" but vague), ask for clarification: 
+               "I see you are in [Physical City], but asking about [Target City]. Do you want to plan a tour for [Target City]?"
+            3. If the user's intent is clear (e.g. "I am moving to [Target City]"), you can proceed to provide the plan immediately, 
+               but still acknowledge the context: "Since you are moving to [Target City] from [Physical City]..."
+
             You will need to use this information to answer the visitor's questions and provide them with a memorable experience.
             You should always ask some clarifying questions to understand the visitor's interests and preferences.
             Whenever you provide a recommendation, you must provide a list of locations and a speech response, locations shouldn't be too far from the starting point.
@@ -245,9 +260,14 @@ class CityWalkAgent:
                 "speech": "Based on what your preferences, I think you would enjoy visiting location 1, location 2, and location N. Would you like to know more about these places?"
             }}
 
-            JSON examples 6: reset conversation: reset the conversation to the beginning, for example, if the visitor's says something like let's restart, start over, etc.
+            JSON examples 7: location clarification:
+            If the visitor's query mentions a city/location DIFFERENT from their current physical location (which you know from the context), you MUST ask for clarification before generating a plan.
+            Example: User is in "Hyderabad" but asks "Plan a tour for Delhi".
             {{
                 "locations": [],
+                "speech": "I see you are currently in Hyderabad, but you asked for a tour of Delhi. Would you like me to plan a tour for Delhi, or would you like to explore Hyderabad first?"
+            }}
+
                 "speech": "Sure! Let's start over. What would you like to see today?"
             }}
 
@@ -377,6 +397,77 @@ class CityWalkAgent:
             place['location']['displayName'] = displayName
             place['location']['rating'] = rating
         return places
+
+    def detect_target_city(self, query):
+        """Detect if user wants to tour a city different from their current location."""
+        system_prompt = """
+            You will be provided with the user query and conversation history.
+            Determine if the user is asking about touring/visiting/planning a trip to a SPECIFIC city.
+            
+            If the user mentions a specific city they want to tour (e.g., "I want to tour Hyderabad", 
+            "Plan a trip to Mumbai", "Make an itinerary for Bangalore"), return:
+            {{
+                "is_different_city": true,
+                "target_city": "City Name, Country"
+            }}
+            
+            If the user is NOT asking about a specific city tour, or is just asking general questions, return:
+            {{
+                "is_different_city": false,
+                "target_city": null
+            }}
+            
+            CONVERSATION HISTORY:
+            {conversations}
+            
+            USER QUERY:
+            {query}
+            
+            IMPORTANT: Return ONLY valid JSON, no additional text.
+        """
+        
+        response_text = call_gemini(
+            model=self.client,
+            system_prompt=system_prompt.format(conversations=json.dumps(self.conversation), query=query),
+            messages=None,
+            temperature=0.3,
+            max_tokens=200
+        )
+        try:
+            cleaned_text = extract_json_from_response(response_text)
+            parsed = json.loads(cleaned_text)
+            return {
+                'is_different_city': parsed.get('is_different_city', False),
+                'target_city': parsed.get('target_city', None)
+            }
+        except json.JSONDecodeError:
+            print(f"Failed to parse target city detection response: {response_text}")
+            return {'is_different_city': False, 'target_city': None}
+
+    def get_city_coordinates(self, city_name):
+        """Geocode a city name to get its latitude and longitude."""
+        try:
+            # Use Google Geocoding API
+            params = {
+                'address': city_name,
+                'key': os.getenv('GOOGLE_API_KEY')
+            }
+            response = requests.get('https://maps.googleapis.com/maps/api/geocode/json', params=params, timeout=5)
+            data = response.json()
+            
+            if data.get('status') == 'OK' and data.get('results'):
+                location = data['results'][0]['geometry']['location']
+                print(f"Geocoded '{city_name}' to: {location}")
+                return {
+                    'lat': location['lat'],
+                    'lng': location['lng']
+                }
+            else:
+                print(f"Geocoding failed for '{city_name}': {data.get('status')}")
+                return None
+        except Exception as e:
+            print(f"Geocoding error for '{city_name}': {e}")
+            return None
     
     def infer_user_preferences(self):
         # use the conversation to infer the user preferences
@@ -555,9 +646,41 @@ class CityWalkAgent:
     def answer(self, query, metadata, first_request):
         if first_request:
             self.language = self.language_detection(query)
+            # Reset conversation on first request to be safe
+            self.conversation = [] 
         else:
             query = self.translate(query)
+        
         city = metadata.city.dict()
+        original_city = city.copy()
+        
+        # Detect City Change to clear context (Fix for "Stuck in Delhi" issue)
+        # We store the last city name in self.memory or a new attribute
+        current_city_name = city.get('name', '')
+        last_city_name = getattr(self, 'last_city_name', '')
+        
+        # If city name changes significantly (and neither is empty), clear history
+        if current_city_name and last_city_name and current_city_name != last_city_name:
+            print(f"City changed from {last_city_name} to {current_city_name}. Clearing conversation history.")
+            self.conversation = []
+            
+        self.last_city_name = current_city_name
+
+        # Detect if user wants to tour a different city than their current location
+        target_city_info = self.detect_target_city(query)
+        if target_city_info.get('is_different_city') and target_city_info.get('target_city'):
+            target_city_name = target_city_info['target_city']
+            print(f"User wants to tour different city: {target_city_name}")
+            target_coords = self.get_city_coordinates(target_city_name)
+            if target_coords:
+                # Override city with target city coordinates for search
+                city = {
+                    'name': target_city_name,
+                    'latitude': target_coords['lat'],
+                    'longitude': target_coords['lng']
+                }
+                print(f"Using target city coordinates: {city}")
+
         # time to get the landmarks
         start = time.time()
         landmarks = self.get_nearby_landmarks(city)
@@ -567,8 +690,9 @@ class CityWalkAgent:
         new_message = {
                 "role": "user",
                 "content": json.dumps({
-                    "current_city": city,
-                    "near_by_landmarks": landmarks,
+                    "user_physical_location": original_city,
+                    "tour_search_location": city,
+                    "landmarks_for_tour_location": landmarks,
                     "new_query": query
                 })
             }

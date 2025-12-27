@@ -69,3 +69,54 @@
   transform: translateY(0);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
+
+/* ====== MOBILE RESPONSIVE STYLES ====== */
+@media (max-width: 768px) {
+  /* Speech Bubble - Compact for mobile */
+  .speech-bubble-container {
+    width: calc(100vw - 40px);
+    max-width: 300px;
+    padding: 10px 14px;
+    max-height: 120px;
+    font-size: 0.85rem;
+  }
+
+  /* Chats Button - Smaller on mobile */
+  .chats-button {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+  }
+
+  /* Hide avatar on very small screens */
+  .mobile-hide {
+    display: none !important;
+  }
+
+  /* Header adjustments */
+  .sherpa-header {
+    gap: 8px;
+  }
+
+  .sherpa-header img.logo {
+    height: 70px;
+  }
+
+  .sherpa-header img.avatar {
+    width: 45px;
+    height: 45px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .speech-bubble-container {
+    width: calc(100vw - 32px);
+    max-width: 260px;
+    padding: 8px 12px;
+    max-height: 100px;
+  }
+
+  .chats-button {
+    display: none;
+  }
+}

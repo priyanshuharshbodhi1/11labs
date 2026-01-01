@@ -1,3 +1,6 @@
+import { TOGGLES } from '../config/toggles';
+import { mockStoryScenes } from '../data/mockStoryData';
+
 /**
  * Makes a request to the Voice View backend API
  * @param {string} query - The query or prompt to send
@@ -45,6 +48,12 @@ export const fetchGuideResponse = async (query, locationName, latitude, longitud
  * @returns {Promise<Object>} - Promise resolving to { scenes: [] }
  */
 export const fetchStory = async (monumentName, locationContext) => {
+  // Return mock data if toggle is enabled to save API costs
+  if (TOGGLES.USE_MOCK_STORY) {
+    console.log('Using mock story data (USE_MOCK_STORY is enabled)');
+    return { scenes: mockStoryScenes };
+  }
+
   try {
     const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
     const response = await fetch(`${backendUrl}/api/generate_story`, {

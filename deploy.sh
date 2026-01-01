@@ -3,7 +3,7 @@
 # Sherpa Deployment Script
 # Usage: ./deploy.sh [project_id]
 
-PROJECT_ID=${1:-beaming-talent-396906}
+PROJECT_ID=${1:-project-34320a6d-6ed6-4151-8c6}
 REGION="us-central1"
 
 echo "🚀 Starting Sherpa Deployment to Project: $PROJECT_ID"

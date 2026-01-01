@@ -3,10 +3,12 @@ import pydantic
 import requests
 import time
 import os
+from typing import List, Optional
 from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 from utils.tts import TTSManager
+from utils.config import Config
 
 load_dotenv()
 
@@ -82,9 +84,9 @@ class DisplayNames(pydantic.BaseModel):
 
 
 class CityWalkResponse(pydantic.BaseModel):
-    locations: list[Location]
+    locations: List[Location]
     speech: str
-    audio_url: str | None = None
+    audio_url: Optional[str] = None
 
 class InformationSeeking(pydantic.BaseModel):
     prediction: bool
@@ -95,12 +97,12 @@ poi = [
 ]
 
 class Preferences(pydantic.BaseModel):
-    likes: list[str]
-    dislikes: list[str]
+    likes: List[str]
+    dislikes: List[str]
     age: str
     education: str
     profession: str
-    visited: list[str]
+    visited: List[str]
 
 class Language(pydantic.BaseModel):
     language: str
@@ -115,9 +117,9 @@ class CityWalkAgent:
         self.conversation = {}
         
         # Configure Vertex AI
-        vertexai.init(project="beaming-talent-396906", location="us-central1")
-        # Using gemini-2.0-flash-exp
-        self.client = GenerativeModel('gemini-2.0-flash-exp')
+        vertexai.init(project=Config.GCP_PROJECT_ID, location="us-central1")
+        # Using Gemini 3 Flash Preview - Latest Dec 2025 model
+        self.client = GenerativeModel(Config.TEXT_MODEL)
         self.tts = TTSManager()
         
         self.system_prompt =  {
@@ -245,8 +247,13 @@ class CityWalkAgent:
                 'srsearch': query,
                 'format': 'json'
             }
+            # Wikipedia requires a User-Agent
+            headers = {
+                'User-Agent': 'SherpaTourGuide/1.0 (contact@example.com)'
+            }
 
-            search_response = requests.get(search_url, params=search_params, timeout=5)
+            # Reduced timeout to 2.0s to avoid blocking the user experience too long
+            search_response = requests.get(search_url, params=search_params, headers=headers, timeout=2.0)
             
             # Check if response is valid JSON
             try:
@@ -267,10 +274,11 @@ class CityWalkAgent:
                     'prop': 'extracts',
                     'pageids': pageid,
                     'explaintext': True,
-                    'format': 'json'
+                    'format': 'json',
+                    'exintro': True, # Only get the intro to be faster/smaller
                 }
                 
-                article_response = requests.get(article_url, params=article_params, timeout=5)
+                article_response = requests.get(article_url, params=article_params, headers=headers, timeout=2.0)
                 article_data = article_response.json()
                 
                 # The extract is contained in the pages object, with the key as the pageid
@@ -279,7 +287,8 @@ class CityWalkAgent:
             else:
                 return ""
         except Exception as e:
-            print(f"Wikipedia API error for '{query}': {e}")
+            # Silent fail or just print simple error to not clutter logs
+            print(f"Wikipedia API skipped for '{query}': {e}")
             return ""
 
 
@@ -355,29 +364,40 @@ class CityWalkAgent:
         return places
 
     def detect_target_city(self, query):
-        """Detect if user wants to tour a city different from their current location."""
+        """Detect if user wants to tour a specific city from their query."""
         system_prompt = """
-            You will be provided with the user query and conversation history.
-            Determine if the user is asking about touring/visiting/planning a trip to a SPECIFIC city.
+            You are a location extraction assistant. Analyze the user's query and extract ANY city or location they mention wanting to tour, visit, explore, or learn about.
             
-            If the user mentions a specific city they want to tour (e.g., "I want to tour Hyderabad", 
-            "Plan a trip to Mumbai", "Make an itinerary for Bangalore"), return:
-            {{
-                "is_different_city": true,
-                "target_city": "City Name, Country"
-            }}
+            IMPORTANT: Be VERY aggressive about detecting locations. If the user mentions ANY city name (like Paris, Mumbai, Tokyo, New York, Hyderabad, Bangalore, London, etc.), extract it.
             
-            If the user is NOT asking about a specific city tour, or is just asking general questions, return:
-            {{
-                "is_different_city": false,
-                "target_city": null
-            }}
+            Examples of queries that SHOULD return a city:
+            - "I want to tour Hyderabad" -> "Hyderabad, India"
+            - "Plan a trip to Mumbai" -> "Mumbai, India"  
+            - "Show me places in Paris" -> "Paris, France"
+            - "What can I see in Tokyo?" -> "Tokyo, Japan"
+            - "Recommend places in New York" -> "New York, USA"
+            - "I'm going to London" -> "London, UK"
+            - "Tour Barcelona" -> "Barcelona, Spain"
+            - "Explore Singapore" -> "Singapore"
+            - "I want to visit Jaipur" -> "Jaipur, India"
+            - "Places to see in Rome" -> "Rome, Italy"
+            
+            Only return is_target_city: false if:
+            - The query is completely generic like "hello" or "hi"
+            - The query asks about a specific monument without a city context
+            - The query is a follow-up question about already-displayed places
             
             CONVERSATION HISTORY:
             {conversations}
             
             USER QUERY:
             {query}
+            
+            Return JSON:
+            {{
+                "is_target_city": true/false,
+                "target_city": "City Name, Country" or null
+            }}
             
             IMPORTANT: Return ONLY valid JSON, no additional text.
         """
@@ -392,10 +412,12 @@ class CityWalkAgent:
         try:
             cleaned_text = extract_json_from_response(response_text)
             parsed = json.loads(cleaned_text)
-            return {
-                'is_different_city': parsed.get('is_different_city', False),
+            result = {
+                'is_different_city': parsed.get('is_target_city', False),
                 'target_city': parsed.get('target_city', None)
             }
+            print(f"[City Detection] Query: '{query}' -> Detected: {result}")
+            return result
         except json.JSONDecodeError:
             print(f"Failed to parse target city detection response: {response_text}")
             return {'is_different_city': False, 'target_city': None}
@@ -626,7 +648,7 @@ class CityWalkAgent:
         target_city_info = self.detect_target_city(query)
         if target_city_info.get('is_different_city') and target_city_info.get('target_city'):
             target_city_name = target_city_info['target_city']
-            print(f"User wants to tour different city: {target_city_name}")
+            print(f"[Location Override] User wants to tour: {target_city_name}")
             target_coords = self.get_city_coordinates(target_city_name)
             if target_coords:
                 # Override city with target city coordinates for search
@@ -635,12 +657,17 @@ class CityWalkAgent:
                     'latitude': target_coords['lat'],
                     'longitude': target_coords['lng']
                 }
-                print(f"Using target city coordinates: {city}")
+                print(f"[Location Override] Successfully geocoded to: lat={city['latitude']}, lng={city['longitude']}")
+            else:
+                print(f"[Location Override] WARNING: Failed to geocode '{target_city_name}', using original location: {original_city}")
+        else:
+            print(f"[Location] Using map center location: {city.get('name', 'Unknown')}")
 
         # time to get the landmarks
         start = time.time()
         landmarks = self.get_nearby_landmarks(city)
         end = time.time()
+        print(f"[Landmarks] Found {len(landmarks)} landmarks in {end-start:.2f}s for location: {city.get('name', 'Unknown')}")
         # time to get the response
         start = time.time()
         new_message = {

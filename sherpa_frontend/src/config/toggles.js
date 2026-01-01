@@ -4,11 +4,11 @@ export const TOGGLES = {
     ENABLE_ANIMATION: true,
     
     // Default number of images/scenes
-    STORY_MODE_IMAGE_COUNT: 5, // Set to 5 as per request
+    STORY_MODE_IMAGE_COUNT: 1, // Set to 5 as per request
     
     // Cost Saving Toggles
-    USE_MOCK_STORY: true, // Use pre-generated Taj Mahal story to save API costs
-    ENABLE_PREFETCH: false, // Disable expensive pre-fetching
+    USE_MOCK_STORY: false, // Use real API data for story generation
+    ENABLE_PREFETCH: false, // Disabled - was causing multiple expensive API calls per landmark
     
     // Audio
     ENABLE_BG_MUSIC: true

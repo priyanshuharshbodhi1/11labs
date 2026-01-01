@@ -16,9 +16,11 @@ const StoryModal = ({ isOpen, onClose, scenes, monumentName }) => {
     
     // Play Audio
     if (currentScene.audio_url) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = new Audio(process.env.REACT_APP_BACKEND_URL + currentScene.audio_url);
+        const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+        const audioSrc = currentScene.audio_url?.startsWith('http') 
+          ? currentScene.audio_url 
+          : backendUrl + currentScene.audio_url;
+        audioRef.current = new Audio(audioSrc);
         audioRef.current.play().catch(e => console.log("Autoplay blocked:", e));
         setIsPlaying(true);
         
@@ -40,8 +42,7 @@ const StoryModal = ({ isOpen, onClose, scenes, monumentName }) => {
                // Story finished
             }
           }, 2000);
-        };
-      }
+      };
     } else {
       // Fallback if no audio: Wait 5 seconds
       const timer = setTimeout(() => {
@@ -64,8 +65,8 @@ const StoryModal = ({ isOpen, onClose, scenes, monumentName }) => {
   
   useEffect(() => {
      if (isOpen) {
-         // Using a royalty-free ambient track
-         bgMusicRef.current = new Audio('https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=ambient-piano-amp-strings-10711.mp3'); 
+         // Using local background music
+         bgMusicRef.current = new Audio('/bg_music.mp3'); 
          bgMusicRef.current.loop = true;
          bgMusicRef.current.volume = 0.2; // Low background volume
          bgMusicRef.current.play().catch(e => console.log("BG Music Auto-play blocked", e));
@@ -112,13 +113,17 @@ const StoryModal = ({ isOpen, onClose, scenes, monumentName }) => {
             <div className="story-image-container">
                 {currentScene?.image_url ? (
                     <img 
-                      src={process.env.REACT_APP_BACKEND_URL + currentScene.image_url} 
+                      src={currentScene.image_url?.startsWith('http') 
+                        ? currentScene.image_url 
+                        : (process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000') + currentScene.image_url} 
                       alt={`Scene ${currentIndex + 1}`} 
                       className="story-image fade-in-image"
+                      loading="eager"
                     />
                 ) : (
                     <div className="placeholder-image">
-                        <span>Generating Visuals...</span>
+                        <div className="loading-spinner"></div>
+                        <span>Loading Image...</span>
                     </div>
                 )}
             </div>

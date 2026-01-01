@@ -13,7 +13,6 @@ This guide details the process to switch the Google Cloud Platform (GCP) account
         - **Google Places API (New)** or **Places API** (`places.googleapis.com`)
         - **Google Maps JavaScript API** (`maps-backend.googleapis.com`)
         - **Geocoding API** (`geocoding-backend.googleapis.com`)
-        - **Google Search API** (if used for images)
 
 ## 2. Local Environment (Terminal)
 
@@ -32,35 +31,47 @@ gcloud auth application-default login
 
 ## 3. Codebase Configuration
 
-Update the project ID in the backend configuration to match your new project.
+Update the project ID in the codebase. You can do this manually or use the search-and-replace command below.
 
-### Backend (`sherpa_backend/`)
+### Method A: Manual Update
 
-1.  **Update `agents/city_walk_agent.py`**:
-    - Open the file and locate the initialization line in `__init__`.
-    - Replace the project ID with your new one.
+Replace the old project ID (e.g., `beaming-talent-396906`) with your new Project ID in the following files:
 
-    ```python
-    # agents/city_walk_agent.py (approx line 85)
-    vertexai.init(project="YOUR_NEW_PROJECT_ID", location="us-central1")
+1.  **Backend Agents**:
+    -   `sherpa_backend/agents/city_walk_agent.py` (Line ~115)
+    -   `sherpa_backend/agents/story_agent.py` (Line ~18 and ~26)
+
+2.  **Deployment Scripts**:
+    -   `deploy.sh` (Line ~5: `PROJECT_ID=...`)
+
+3.  **Utility Scripts**:
+    -   `sherpa_backend/scripts/check_models.py` (Line ~33)
+
+4.  **Frontend Config**:
+    -   If you generated a new Google Maps API Key, update `sherpa_frontend/src/config/api-keys.js` (or `.env` file if used).
+
+### Method B: Bulk Command (Linux/Mac)
+
+Run this command from the root of your repository (`/home/priyanshu/repos/11labs/`) to replace it everywhere:
+
+```bash
+# Replace OLD_ID and NEW_ID with your actual project IDs
+grep -r "OLD_ID" .
+# Verify the list, then run:
+find . -type f \( -name "*.py" -o -name "*.sh" \) -not -path "*/venv/*" -exec sed -i 's/OLD_ID/NEW_ID/g' {} +
+```
+
+Example:
+```bash
+find . -type f \( -name "*.py" -o -name "*.sh" \) -not -path "*/venv/*" -exec sed -i 's/beaming-talent-396906/YOUR_NEW_PROJECT_ID/g' {} +
+```
+
+## 4. Verification
+
+After updating:
+
+1.  Restart your backend server:
+    ```bash
+    python main.py
     ```
-
-2.  **Update `agents/story_agent.py`**:
-    - Open the file and locate the initialization line in `__init__`.
-    - Replace the project ID.
-
-    ```python
-    # agents/story_agent.py (approx line 22)
-    vertexai.init(project="YOUR_NEW_PROJECT_ID", location="us-central1")
-    ```
-
-3.  **Update `.env` (API Keys)**:
-    - If you generated a new API Key for Google Maps/Places in the new project, update your `.env` file in `sherpa_backend/.env`.
-    - Update `GOOGLE_API_KEY=AIzaSy...`
-
-### Frontend (`sherpa_frontend/`)
-
-1.  **Update API Keys**:
-    - Check `src/config/api-keys.js`.
-    - Update the `GOOGLE` key with the new project's API key.
-    - *Note: Ensure your new API key has restrictions allowing `localhost:3000` (or your deployment domain).*
+2.  Send a test query to Ensure Vertex AI calls succeed.

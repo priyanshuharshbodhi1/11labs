@@ -7,7 +7,7 @@ load_dotenv()
 class Config:
     # Story Mode Configuration
     # Story Mode Configuration
-    STORY_IMAGE_COUNT = 2  # Number of images to generate (1 per scene for the first 2 scenes, or split)
+    STORY_IMAGE_COUNT = 1  # Number of images to generate (reduced to 1 for speed)
     # Using Imagen 3 Fast (comparable to "Nano Banana" efficiency)
     IMAGE_GENERATION_MODEL = "imagen-3.0-fast-generate-001" 
     
@@ -20,3 +20,6 @@ class Config:
     
     # Mock Data Toggle
     USE_MOCK_DATA = False
+
+    # Google Cloud Project ID
+    GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "project-34320a6d-6ed6-4151-8c6")

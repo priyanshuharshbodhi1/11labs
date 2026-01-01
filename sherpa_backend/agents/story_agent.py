@@ -12,10 +12,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class StoryAgent:
+    # In-memory cache for generated stories (persists during server runtime)
+    _story_cache = {}
+    
     def __init__(self):
         # Initialize Vertex AI for both text and images
         # Ensure project is set (re-using context if already initialized, but explicit is safer for independence)
-        vertexai.init(project="beaming-talent-396906", location="us-central1")
+        vertexai.init(project=Config.GCP_PROJECT_ID, location="us-central1")
         
         # Initialize Text Model (Vertex AI)
         self.text_model = GenerativeModel(Config.TEXT_MODEL)
@@ -23,7 +26,7 @@ class StoryAgent:
         try:
             # Initialize vertexai - using specific project ID provided by user
             # This ensures this feature works independently of global default credentials if they differ
-            vertexai.init(project="beaming-talent-396906", location="us-central1") 
+            vertexai.init(project=Config.GCP_PROJECT_ID, location="us-central1") 
             self.image_model = ImageGenerationModel.from_pretrained(Config.IMAGE_GENERATION_MODEL)
             self.image_gen_available = True
             print(f"Vertex AI Image Generation initialized with model: {Config.IMAGE_GENERATION_MODEL}")
@@ -32,71 +35,50 @@ class StoryAgent:
             self.image_gen_available = False
 
         self.tts = TTSManager()
+    
+    def _get_cache_key(self, monument_name):
+        """Generate a cache key from monument name"""
+        return "".join(x for x in monument_name if x.isalnum() or x in (' ', '_', '-')).strip().replace(' ', '_').lower()
         
-    def generate_story(self, monument_name, location_context):
-        """
-        Generates a 5-scene story about the monument.
-        Returns a list of scene objects: { text, audio_url, image_url, image_base64 }
-        """
+    def _process_scene(self, scene, index, monument_name):
+        """Process a single scene: Generate Audio and Image"""
+        narration = scene.get('narration', '')
+        image_prompt = scene.get('image_prompt', '')
         
-        # 1. Generate Story Script
-        prompt = f"""
-        Create a vivid, storytelling narration about {monument_name} in {location_context}.
-        It must be exactly {Config.STORY_IMAGE_COUNT} short scenes (paragraphs).
+        scene_result = {
+            "text": narration,
+            "scene_index": index
+        }
         
-        Structure the story to strictly follow this arc:
-        Scene 1: "The Origin & Purpose". Describe HOW and WHY it was built. Mention the construction effort, the vision, or the historical need.
-        Scene 2: "The Visitor Experience". Describe what it feels like to stand there today. Explain why it is an unmissable destination and worth the journey.
+        # Sanitize monument name for filenames (remove special chars)
+        safe_name = "".join(x for x in monument_name if x.isalnum() or x in (' ', '_', '-')).strip().replace(' ', '_')
         
-        The goal is to deeply persuade the user to visit by connecting them to its creation and its present-day majesty.
-        Focus on emotion, grandeur, and human effort.
-        
-        For each scene, provide:
-        1. 'narration': The text to be spoken (keep it under 40 words per scene for impact).
-        2. 'image_prompt': A detailed prompt to generate a photorealistic, cinematic image corresponding to that specific angle (e.g., workers building it, or a wide shot of the finished marvel).
-        
-        Output valid JSON format:
-        [
-            {{ "narration": "...", "image_prompt": "..." }},
-            ...
-        ]
-        """
-        
-        print(f"Generating story script for {monument_name}...")
+        # Generate Audio
         try:
-            response = self.text_model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
-            scenes_data = json.loads(response.text)
+            audio_path = self.tts.generate_audio(
+                narration, 
+                voice_id=Config.STORY_VOICE_ID
+            )
+            if audio_path:
+                # Store absolute path usage or move if needed? 
+                # TTS saves to audio_cache by default.
+                # We need to ensure the filename is web-safe if we were naming it ourselves, 
+                # but TTSManager handles naming. We just need the basename.
+                scene_result["audio_url"] = f"/audio/{os.path.basename(audio_path)}"
         except Exception as e:
-            print(f"Error generating story script: {e}")
-            return []
-            
-        final_scenes = []
+            print(f"Error generating audio for scene {index}: {e}")
         
-        # 2. Process each scene
-        for index, scene in enumerate(scenes_data):
-            narration = scene.get('narration', '')
-            image_prompt = scene.get('image_prompt', '')
+        # Generate Image (only if configured and available)
+        if self.image_gen_available and image_prompt:
+            image_filename = f"story_{safe_name}_{index}.png"
+            image_path = os.path.join("audio_cache", image_filename)
             
-            scene_result = {
-                "text": narration,
-                "scene_index": index
-            }
-            
-            # Generate Audio
-            try:
-                audio_path = self.tts.generate_audio(
-                    narration, 
-                    voice_id=Config.STORY_VOICE_ID
-                )
-                if audio_path:
-                    # Conversion for frontend URL access (assuming backend mounts /audio)
-                    scene_result["audio_url"] = f"/audio/{os.path.basename(audio_path)}"
-            except Exception as e:
-                print(f"Error generating audio for scene {index}: {e}")
-            
-            # Generate Image (only if configured and available)
-            if self.image_gen_available and image_prompt:
-                print(f"Generating image for scene {index}...")
+            # Check if image already exists on disk (disk cache)
+            if os.path.exists(image_path):
+                print(f"Image cache HIT for scene {index} - using existing image")
+                scene_result["image_url"] = f"/audio/{image_filename}"
+            else:
+                print(f"Image cache MISS - generating image for scene {index}...")
                 try:
                     # Generate 1 image per scene
                     images = self.image_model.generate_images(
@@ -109,21 +91,79 @@ class StoryAgent:
                     )
                     
                     if images:
-                        # Convert to base64 for easy transport (or save to disk and serve URL)
-                        # Saving to disk is better for caching, but for now we'll use base64 or save.
-                        # Let's save to disk to be consistent with audio
-                        
-                        image_filename = f"story_{monument_name.replace(' ', '_')}_{index}.png"
-                        image_path = os.path.join("audio_cache", image_filename) # Reusing audio_cache dir for simplicity or make new one
-                        
                         images[0].save(location=image_path, include_generation_parameters=False)
-                        scene_result["image_url"] = f"/audio/{image_filename}" # Serving from same static mount
+                        scene_result["image_url"] = f"/audio/{image_filename}"
                         
                 except Exception as e:
                     print(f"Error generating image for scene {index}: {e}")
-                    # Fallback or placeholder could be handled on frontend
+        
+        return scene_result
+
+    def generate_story(self, monument_name, location_context):
+        """
+        Generates a story about the monument with caching for speed.
+        Returns a list of scene objects: { text, audio_url, image_url }
+        """
+        
+        # Check cache first for instant response
+        cache_key = self._get_cache_key(monument_name)
+        if cache_key in StoryAgent._story_cache:
+            print(f"Cache HIT for {monument_name} - returning cached story")
+            return StoryAgent._story_cache[cache_key]
+        
+        print(f"Cache MISS for {monument_name} - generating new story...")
+        
+        # 1. Generate Story Script
+        prompt = f"""
+        Create a vivid, storytelling narration about {monument_name} in {location_context}.
+        It must be exactly {Config.STORY_IMAGE_COUNT} short scene(s).
+        
+        For the scene, describe: The essence and majesty of this place - why it was built, what makes it special, and why it's worth visiting. Create an emotional connection.
+        
+        The goal is to deeply persuade the user to visit by connecting them to its creation and its present-day majesty.
+        Focus on emotion, grandeur, and human effort.
+        
+        For each scene, provide:
+        1. 'narration': The text to be spoken (keep it under 50 words for impact).
+        2. 'image_prompt': A detailed prompt to generate a photorealistic, cinematic image of the monument in its full glory.
+        
+        Output valid JSON format:
+        [
+            {{ "narration": "...", "image_prompt": "..." }}
+        ]
+        """
+        
+        print(f"Generating story script for {monument_name}...")
+        try:
+            response = self.text_model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+            scenes_data = json.loads(response.text)
+        except Exception as e:
+            print(f"Error generating story script: {e}")
+            return []
             
-            final_scenes.append(scene_result)
+        # 2. Process all scenes in parallel
+        import concurrent.futures
+        
+        # Limit to 5 workers (one per scene usually)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            # Map the helper function to the data
+            futures = [
+                executor.submit(self._process_scene, scene, index, monument_name)
+                for index, scene in enumerate(scenes_data)
+            ]
+            
+            # Retrieve results as they complete (order matters for the list though)
+            # We want to preserve order, so we iterate over futures in creation order
+            final_scenes = []
+            for future in futures:
+                try:
+                    final_scenes.append(future.result())
+                except Exception as e:
+                    print(f"Error processing scene future: {e}")
+        
+        # Cache the result for future requests
+        StoryAgent._story_cache[cache_key] = final_scenes
+        print(f"Cached story for {monument_name}")
             
         return final_scenes
 
